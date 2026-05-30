@@ -40,7 +40,7 @@ FEED_PATH = OUTPUT_DIR / "feed.xml"
 STATE_PATH = OUTPUT_DIR / "state.json"
 
 FEED_TITLE = "SEJ SEO 每日重點(AI 中英對照)"
-FEED_LINK = os.environ.get("PUBLIC_FEED_URL", "https://YOUR_USERNAME.github.io/YOUR_REPO/feed.xml")
+FEED_LINK = os.environ.get("PUBLIC_FEED_URL", "https://ansoncky64-1996.github.io/SEJ-Digest/feed.xml")
 FEED_DESC = "Search Engine Journal SEO 專欄最新文章,經 AI 整理成中英對照重點。"
 
 # OpenRouter 係 OpenAI 相容,只係改 base_url + key
