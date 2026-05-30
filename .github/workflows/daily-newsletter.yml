@@ -25,7 +25,7 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           # 想換模型?喺呢度填 OpenRouter 嘅 model ID(留空就用 script 內預設)
           # MODEL: "google/gemini-2.0-flash-001"
-          PUBLIC_FEED_URL: "https://YOUR_USERNAME.github.io/YOUR_REPO/feed.xml"
+          PUBLIC_FEED_URL: "https://ansoncky64-1996.github.io/SEJ-Digest/feed.xml"
         run: python generate_feed.py
 
       - name: Commit updated feed
