@@ -33,7 +33,7 @@ SOURCE_FEED = os.environ.get(
 # 去 https://openrouter.ai/models 撳「Price: Low to High」,copy 你想用嘅 model ID 貼喺度。
 # 例:google/gemini-2.0-flash-001(平靚正)、deepseek/deepseek-chat(更平)、
 #     或者免費試:加 :free 尾(有速率限制)。
-MODEL = os.environ.get("MODEL", "deepseek/deepseek-chat")
+MODEL = os.environ.get("MODEL", "deepseek-v4-flash")
 MAX_ITEMS = int(os.environ.get("MAX_ITEMS", "20"))       # feed 內保留最近幾多篇
 OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", "docs"))  # GitHub Pages 由 /docs 派發
 FEED_PATH = OUTPUT_DIR / "feed.xml"
