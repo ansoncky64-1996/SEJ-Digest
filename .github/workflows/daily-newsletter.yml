@@ -1,0 +1,41 @@
+name: Daily SEJ SEO digest
+
+on:
+  schedule:
+    - cron: "0 1 * * *"   # 每日 UTC 01:00 = 香港時間 09:00(GitHub 排程偶爾延遲幾分鐘,正常)
+  workflow_dispatch:        # 容許喺 Actions 頁面手動撳掣測試
+
+permissions:
+  contents: write           # 俾 workflow 將更新後嘅 feed 推返入 repo
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Generate enriched feed
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # 想換模型?喺呢度填 OpenRouter 嘅 model ID(留空就用 script 內預設)
+          # MODEL: "google/gemini-2.0-flash-001"
+          PUBLIC_FEED_URL: "https://YOUR_USERNAME.github.io/YOUR_REPO/feed.xml"
+        run: python generate_feed.py
+
+      - name: Commit updated feed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/feed.xml docs/state.json
+          if git diff --staged --quiet; then
+            echo "今日冇新文章,feed 無變動。"
+          else
+            git commit -m "Update SEJ SEO digest feed ($(date -u +%Y-%m-%d))"
+            git push
+          fi
