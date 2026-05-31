@@ -33,7 +33,7 @@ jobs:
           BRAND_NAME: "SEO 每日重點"
           BRAND_COLOR: "#1f4e79"
           LOGO_URL: ""        # 有 logo 就放圖片網址(例如放喺 GitHub Pages 嗰條)
-          MODEL: ""           # 留空就用 script 內預設;想指定 V4 就喺度填 DeepSeek V4 ID
+          MODEL: "deepseek/deepseek-v4-flash"           # 留空就用 script 內預設;想指定 V4 就喺度填 DeepSeek V4 ID
           TEST_SEND: ${{ inputs.test }}
         run: python generate_feed.py
 
