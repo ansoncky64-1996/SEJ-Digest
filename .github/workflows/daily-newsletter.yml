@@ -2,40 +2,49 @@ name: Daily SEJ SEO digest
 
 on:
   schedule:
-    - cron: "0 1 * * *"   # 每日 UTC 01:00 = 香港時間 09:00(GitHub 排程偶爾延遲幾分鐘,正常)
-  workflow_dispatch:        # 容許喺 Actions 頁面手動撳掣測試
+    - cron: "0 1 * * *"   # 每日 UTC 01:00 = 香港 09:00(GitHub 排程偶爾延遲幾分鐘,正常)
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "測試模式(只將最近 3 篇寄俾自己)"
+        type: boolean
+        default: false
 
 permissions:
-  contents: write           # 俾 workflow 將更新後嘅 feed 推返入 repo
+  contents: write           # 俾 workflow 將去重記錄 state.json 推返入 repo
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - run: pip install -r requirements.txt
 
-      - name: Generate enriched feed
+      - name: Generate digest and send email
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          # 想換模型?喺呢度填 OpenRouter 嘅 model ID(留空就用 script 內預設)
-          # MODEL: "google/gemini-2.0-flash-001"
-          PUBLIC_FEED_URL: "https://ansoncky64-1996.github.io/SEJ-Digest/feed.xml"
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          RECIPIENTS: ${{ secrets.RECIPIENTS }}
+          # ↓ 以下係 branding,可以直接喺度改(唔係 secret)
+          BRAND_NAME: "SEO 每日重點"
+          BRAND_COLOR: "#1f4e79"
+          LOGO_URL: ""        # 有 logo 就放圖片網址(例如放喺 GitHub Pages 嗰條)
+          MODEL: ""           # 留空就用 script 內預設;想指定 V4 就喺度填 DeepSeek V4 ID
+          TEST_SEND: ${{ inputs.test }}
         run: python generate_feed.py
 
-      - name: Commit updated feed
+      - name: Commit dedup state
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/feed.xml docs/state.json
+          git add docs/state.json
           if git diff --staged --quiet; then
-            echo "今日冇新文章,feed 無變動。"
+            echo "去重記錄無變動。"
           else
-            git commit -m "Update SEJ SEO digest feed ($(date -u +%Y-%m-%d))"
+            git commit -m "Update dedup state ($(date -u +%Y-%m-%d))"
             git push
           fi
