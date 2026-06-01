@@ -30,7 +30,7 @@ SOURCE_FEEDS = [u.strip() for u in os.environ.get(
     "SOURCE_FEEDS",
     "https://www.searchenginejournal.com/category/seo/feed/,https://searchengineland.com/feed/",
 ).split(",") if u.strip()]
-MODEL = os.environ.get("MODEL", "deepseek/deepseek-v4-flash")  # ← 換返你之前用嘅 DeepSeek V4 ID
+MODEL = os.environ.get("MODEL", "deepseek/deepseek-chat")  # ← 換返你之前用嘅 DeepSeek V4 ID
 MAX_NEW_PER_RUN = int(os.environ.get("MAX_NEW_PER_RUN", "10"))  # 單次最多加工幾多篇(防爆)
 SEEN_CAP = 500  # state.json 記住幾多條舊連結
 
@@ -78,15 +78,42 @@ PROMPT = """你係一個為香港 SEO 團隊服務嘅新聞編輯。以下係一
 
 
 
+BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+
+
+def fetch_feed(url):
+    """用瀏覽器 User-Agent 讀 feed,避免被網站當機械人封鎖(403)。"""
+    # 先試直接帶 UA + Accept header
+    parsed = feedparser.parse(url, request_headers={
+        "User-Agent": BROWSER_UA,
+        "Accept": "application/rss+xml, application/xml, text/xml, */*",
+    })
+    if not parsed.bozo or parsed.entries:
+        return parsed
+    # 後備:用 urllib 自行抓返 bytes 再交俾 feedparser 解析
+    try:
+        import urllib.request
+        req = urllib.request.Request(url, headers={"User-Agent": BROWSER_UA})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return feedparser.parse(r.read())
+    except Exception as e:
+        print(f"    (後備抓取亦失敗:{e})")
+        return parsed
+
+
 def gather_entries() -> list:
     """讀齊所有來源 feed,合併、按發佈時間新到舊排序,並移除重複連結。"""
     merged = []
     seen_links = set()
     for url in SOURCE_FEEDS:
-        parsed = feedparser.parse(url)
+        parsed = fetch_feed(url)
         if parsed.bozo and not parsed.entries:
-            print(f"  ⚠ 讀唔到來源,跳過:{url}")
+            reason = getattr(parsed, "bozo_exception", "")
+            status = getattr(parsed, "status", "")
+            print(f"  ⚠ 讀唔到來源,跳過:{url}  (status={status} {reason})")
             continue
+        print(f"  ✓ {url} → {len(parsed.entries)} 篇")
         for e in parsed.entries:
             link = e.get("link")
             if not link or link in seen_links:
