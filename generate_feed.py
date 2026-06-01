@@ -30,7 +30,7 @@ SOURCE_FEEDS = [u.strip() for u in os.environ.get(
     "SOURCE_FEEDS",
     "https://www.searchenginejournal.com/category/seo/feed/,https://rss.app/feeds/UEkjjet8qs4Vw8BA.xml",
 ).split(",") if u.strip()]
-MODEL = os.environ.get("MODEL", "deepseek/deepseek-chat")  # ← 換返你之前用嘅 DeepSeek V4 ID
+MODEL = os.environ.get("MODEL", "deepseek/deepseek-v4-flash")  # ← 換返你之前用嘅 DeepSeek V4 ID
 # 只接受呢啲網域嘅文章(隔走 RSS.app 夾雜嘅 webinar/廣告等雜連結)。逗號分隔;留空 = 全部接受。
 ALLOWED_DOMAINS = [d.strip().lower() for d in os.environ.get(
     "ALLOWED_DOMAINS",
