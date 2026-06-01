@@ -30,7 +30,7 @@ SOURCE_FEEDS = [u.strip() for u in os.environ.get(
     "SOURCE_FEEDS",
     "https://www.searchenginejournal.com/category/seo/feed/,https://searchengineland.com/feed/",
 ).split(",") if u.strip()]
-MODEL = os.environ.get("MODEL", "deepseek/deepseek-chat")  # ← 換返你之前用嘅 DeepSeek V4 ID
+MODEL = os.environ.get("MODEL", "deepseek/deepseek-v4-flash")  # ← 換返你之前用嘅 DeepSeek V4 ID
 MAX_NEW_PER_RUN = int(os.environ.get("MAX_NEW_PER_RUN", "10"))  # 單次最多加工幾多篇(防爆)
 SEEN_CAP = 500  # state.json 記住幾多條舊連結
 
