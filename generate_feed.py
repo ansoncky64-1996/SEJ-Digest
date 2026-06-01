@@ -82,24 +82,58 @@ BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
 
+# 公開免費代理:當網站用 Cloudflare 封 data center IP(例如 Search Engine Land),
+# 改由代理用佢自己嘅 IP 代讀,回傳原始 feed bytes。可加多幾個增加成功率。
+PROXY_TEMPLATES = [u.strip() for u in os.environ.get(
+    "FEED_PROXIES",
+    "https://api.allorigins.win/raw?url={url},https://corsproxy.io/?url={url}",
+).split(",") if u.strip()]
+
+
+def _fetch_bytes(url, timeout=45):
+    import urllib.request
+    req = urllib.request.Request(url, headers={
+        "User-Agent": BROWSER_UA,
+        "Accept": "application/rss+xml, application/xml, text/xml, */*",
+    })
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
 def fetch_feed(url):
-    """用瀏覽器 User-Agent 讀 feed,避免被網站當機械人封鎖(403)。"""
-    # 先試直接帶 UA + Accept header
+    """多重後備讀取:直接 → urllib → 公開代理。專治 Cloudflare 403 封鎖。"""
+    # 1) 直接帶瀏覽器 UA
     parsed = feedparser.parse(url, request_headers={
         "User-Agent": BROWSER_UA,
         "Accept": "application/rss+xml, application/xml, text/xml, */*",
     })
-    if not parsed.bozo or parsed.entries:
+    if parsed.entries:
         return parsed
-    # 後備:用 urllib 自行抓返 bytes 再交俾 feedparser 解析
+
+    # 2) 用 urllib 自行抓
     try:
-        import urllib.request
-        req = urllib.request.Request(url, headers={"User-Agent": BROWSER_UA})
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return feedparser.parse(r.read())
+        p = feedparser.parse(_fetch_bytes(url))
+        if p.entries:
+            return p
     except Exception as e:
-        print(f"    (後備抓取亦失敗:{e})")
-        return parsed
+        print(f"    (直接抓取失敗:{e})")
+
+    # 3) 經公開代理代讀
+    import urllib.parse
+    enc = urllib.parse.quote(url, safe="")
+    for tmpl in PROXY_TEMPLATES:
+        proxy_url = tmpl.format(url=enc)
+        host = urllib.parse.urlparse(proxy_url).netloc
+        try:
+            p = feedparser.parse(_fetch_bytes(proxy_url))
+            if p.entries:
+                print(f"    (經代理成功:{host} → {len(p.entries)} 篇)")
+                return p
+            print(f"    (代理 {host} 回傳冇文章)")
+        except Exception as e:
+            print(f"    (代理 {host} 失敗:{e})")
+
+    return parsed
 
 
 def gather_entries() -> list:
