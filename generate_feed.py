@@ -30,7 +30,12 @@ SOURCE_FEEDS = [u.strip() for u in os.environ.get(
     "SOURCE_FEEDS",
     "https://www.searchenginejournal.com/category/seo/feed/,https://rss.app/feeds/UEkjjet8qs4Vw8BA.xml",
 ).split(",") if u.strip()]
-MODEL = os.environ.get("MODEL", "deepseek/deepseek-v4-flash")  # ← 換返你之前用嘅 DeepSeek V4 ID
+MODEL = os.environ.get("MODEL", "deepseek/deepseek-chat")  # ← 換返你之前用嘅 DeepSeek V4 ID
+# 只接受呢啲網域嘅文章(隔走 RSS.app 夾雜嘅 webinar/廣告等雜連結)。逗號分隔;留空 = 全部接受。
+ALLOWED_DOMAINS = [d.strip().lower() for d in os.environ.get(
+    "ALLOWED_DOMAINS",
+    "searchenginejournal.com,searchengineland.com",
+).split(",") if d.strip()]
 MAX_NEW_PER_RUN = int(os.environ.get("MAX_NEW_PER_RUN", "10"))  # 單次最多加工幾多篇(防爆)
 SEEN_CAP = 500  # state.json 記住幾多條舊連結
 
@@ -152,6 +157,9 @@ def gather_entries() -> list:
         for e in parsed.entries:
             link = e.get("link")
             if not link or link in seen_links:
+                continue
+            if ALLOWED_DOMAINS and not any(d in link.lower() for d in ALLOWED_DOMAINS):
+                print(f"    (略過非白名單連結:{link})")
                 continue
             seen_links.add(link)
             ts = e.get("published_parsed") or e.get("updated_parsed")
