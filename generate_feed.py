@@ -25,7 +25,11 @@ import trafilatura
 from openai import OpenAI
 
 # ---------- 基本設定 ----------
-SOURCE_FEED = os.environ.get("SOURCE_FEED", "https://www.searchenginejournal.com/category/seo/feed/")
+# 多個來源:用逗號分隔。想加站就喺呢度(或 workflow 嘅 SOURCE_FEEDS)加多條 feed URL。
+SOURCE_FEEDS = [u.strip() for u in os.environ.get(
+    "SOURCE_FEEDS",
+    "https://www.searchenginejournal.com/category/seo/feed/,https://searchengineland.com/category/seo/feed/",
+).split(",") if u.strip()]
 MODEL = os.environ.get("MODEL", "deepseek/deepseek-v4-flash")  # ← 換返你之前用嘅 DeepSeek V4 ID
 MAX_NEW_PER_RUN = int(os.environ.get("MAX_NEW_PER_RUN", "10"))  # 單次最多加工幾多篇(防爆)
 SEEN_CAP = 500  # state.json 記住幾多條舊連結
@@ -37,9 +41,9 @@ HKT = dt.timezone(dt.timedelta(hours=8))
 GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "")          # 你個 Gmail(寄件人)
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "") # Gmail app password(16 位)
 RECIPIENTS = [e.strip() for e in os.environ.get("RECIPIENTS", "").split(",") if e.strip()]
-BRAND_NAME = os.environ.get("BRAND_NAME", "SEO 每日重點")
-BRAND_COLOR = os.environ.get("BRAND_COLOR", "#1f4e79")
-LOGO_URL = os.environ.get("LOGO_URL", "")                    # 可選:logo 圖片網址
+BRAND_NAME = os.environ.get("BRAND_NAME", "Digital Zoo")
+BRAND_COLOR = os.environ.get("BRAND_COLOR", "#FF0080")
+LOGO_URL = os.environ.get("LOGO_URL", "https://digitalzoo.com.hk/wp-content/uploads/2024/05/digial.png")  # Digital Zoo wordmark,可換
 TEST_SEND = os.environ.get("TEST_SEND", "").lower() in ("1", "true", "yes")
 
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=os.environ.get("OPENROUTER_API_KEY"))
@@ -70,6 +74,29 @@ PROMPT = """你係一個為香港 SEO 團隊服務嘅新聞編輯。以下係一
 文章內容:
 {body}
 """
+
+
+
+def gather_entries() -> list:
+    """讀齊所有來源 feed,合併、按發佈時間新到舊排序,並移除重複連結。"""
+    merged = []
+    seen_links = set()
+    for url in SOURCE_FEEDS:
+        parsed = feedparser.parse(url)
+        if parsed.bozo and not parsed.entries:
+            print(f"  ⚠ 讀唔到來源,跳過:{url}")
+            continue
+        for e in parsed.entries:
+            link = e.get("link")
+            if not link or link in seen_links:
+                continue
+            seen_links.add(link)
+            ts = e.get("published_parsed") or e.get("updated_parsed")
+            e["_sort_ts"] = tuple(ts) if ts else (0,)
+            merged.append(e)
+    merged.sort(key=lambda e: e.get("_sort_ts", (0,)), reverse=True)
+    print(f"合共讀到 {len(merged)} 篇文章,來自 {len(SOURCE_FEEDS)} 個來源。")
+    return merged
 
 
 def strip_html(s: str) -> str:
@@ -137,37 +164,85 @@ def summarise(title: str, link: str, body: str) -> str:
     return out
 
 
+def source_name(link: str) -> str:
+    l = (link or "").lower()
+    if "searchenginejournal" in l:
+        return "Search Engine Journal"
+    if "searchengineland" in l:
+        return "Search Engine Land"
+    m = re.search(r"https?://([^/]+)", l)
+    return m.group(1).replace("www.", "") if m else "其他來源"
+
+
 def build_email_html(items: list) -> str:
-    today = dt.datetime.now(HKT).strftime("%Y-%m-%d")
-    if LOGO_URL:
-        brand = f'<img src="{html.escape(LOGO_URL)}" alt="{html.escape(BRAND_NAME)}" height="32" style="display:block;border:0;">'
-    else:
-        brand = f'<span style="font-size:20px;font-weight:800;color:#ffffff;letter-spacing:.3px;">{html.escape(BRAND_NAME)}</span>'
+    today = dt.datetime.now(HKT).strftime("%Y年%m月%d日")
+    ACCENT = BRAND_COLOR
+    INK = "#1a1a2e"
+    MUTED = "#6b7280"
+    BORDER = "#ececf1"
+    PAGE_BG = "#f0f1f4"
 
-    cards = []
+    groups = {}
     for it in items:
-        cards.append(f'''
-      <tr><td style="padding:22px 28px;border-bottom:1px solid #eeeeee;">
-        <a href="{html.escape(it['link'])}" style="font-size:17px;font-weight:700;color:#1a1a1a;text-decoration:none;line-height:1.4;">{html.escape(it['title'])}</a>
-        <div style="margin-top:12px;font-size:14px;color:#333333;line-height:1.65;">{it['summary_html']}</div>
-        <a href="{html.escape(it['link'])}" style="display:inline-block;margin-top:12px;font-size:13px;font-weight:600;color:{BRAND_COLOR};text-decoration:none;">閱讀原文 →</a>
-      </td></tr>''')
+        groups.setdefault(source_name(it["link"]), []).append(it)
 
-    return f'''<!DOCTYPE html><html><body style="margin:0;background:#f4f5f7;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:24px 0;">
-    <tr><td align="center">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;font-family:-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,'PingFang HK','Microsoft JhengHei',sans-serif;">
-        <tr><td style="background:{BRAND_COLOR};padding:18px 28px;">{brand}
-          <div style="margin-top:4px;font-size:13px;color:#dfe7f1;">SEO 每日重點 · {today}</div>
-        </td></tr>
-        {''.join(cards)}
-        <tr><td style="padding:18px 28px;background:#fafafa;font-size:12px;color:#888888;line-height:1.6;">
-          內容由 Search Engine Journal 文章經 AI 整理重點,版權歸原作者,請按標題閱讀原文。<br>呢封係團隊內部 SEO 摘要。
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body></html>'''
+    if LOGO_URL:
+        brand = f'<img src="{html.escape(LOGO_URL)}" alt="{html.escape(BRAND_NAME)}" height="34" style="display:block;height:34px;width:auto;border:0;">'
+    else:
+        brand = f'<span style="font-size:22px;font-weight:800;color:{INK};">{html.escape(BRAND_NAME)}</span>'
+
+    sections = []
+    for src_name, arr in groups.items():
+        cards = []
+        for it in arr:
+            cards.append(
+                f'<tr><td style="padding:20px 0;border-bottom:1px solid {BORDER};">'
+                f'<a href="{html.escape(it["link"])}" style="font-size:16px;font-weight:700;color:{INK};text-decoration:none;line-height:1.45;">{html.escape(it["title"])}</a>'
+                f'<div style="margin-top:11px;font-size:13.5px;color:#3a3a45;line-height:1.7;">{it["summary_html"]}</div>'
+                f'<a href="{html.escape(it["link"])}" style="display:inline-block;margin-top:12px;font-size:12.5px;font-weight:600;color:{ACCENT};text-decoration:none;">閱讀原文 &rarr;</a>'
+                f'</td></tr>'
+            )
+        sections.append(
+            f'<tr><td style="padding:30px 34px 4px;">'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+            f'<td width="4" style="background:{ACCENT};border-radius:2px;line-height:1px;font-size:1px;">&nbsp;</td>'
+            f'<td style="padding-left:10px;">'
+            f'<span style="font-size:15px;font-weight:800;color:{INK};letter-spacing:.2px;">{html.escape(src_name)}</span>'
+            f'<span style="font-size:12px;color:{MUTED};font-weight:600;">　{len(arr)} 篇</span>'
+            f'</td></tr></table></td></tr>'
+            f'<tr><td style="padding:0 34px;">'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">{"".join(cards)}</table>'
+            f'</td></tr>'
+        )
+
+    header = (
+        f'<tr><td style="padding:26px 34px 20px;border-bottom:3px solid {ACCENT};">'
+        f'{brand}'
+        f'<div style="margin-top:14px;">'
+        f'<span style="font-size:19px;font-weight:800;color:{INK};">SEO 每日重點</span>'
+        f'<div style="margin-top:3px;font-size:12.5px;color:{MUTED};">每日精選 SEO 行業新文 · AI 中英對照摘要 · {today}</div>'
+        f'</div></td></tr>'
+    )
+    footer = (
+        f'<tr><td style="padding:22px 34px;background:#fafafb;border-top:1px solid {BORDER};font-size:11.5px;color:#9aa0aa;line-height:1.7;">'
+        f'內容由 Search Engine Journal 及 Search Engine Land 之文章經 AI 整理重點,版權歸原作者所有,詳情請按標題閱讀原文。<br>'
+        f'本摘要為 {html.escape(BRAND_NAME)} 團隊內部 SEO 參考之用。</td></tr>'
+    )
+
+    return (
+        '<!DOCTYPE html><html><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+        f'<body style="margin:0;padding:0;background:{PAGE_BG};">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:{PAGE_BG};padding:28px 12px;">'
+        '<tr><td align="center">'
+        '<table role="presentation" width="600" cellpadding="0" cellspacing="0" '
+        f'style="max-width:600px;width:100%;background:#ffffff;border:1px solid {BORDER};border-radius:14px;overflow:hidden;'
+        'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,\'PingFang HK\',\'Microsoft JhengHei\',sans-serif;">'
+        f'{header}{"".join(sections)}{footer}'
+        '</table>'
+        f'<div style="margin-top:14px;font-size:11px;color:#b0b4bd;font-family:Arial,sans-serif;">Powered by {html.escape(BRAND_NAME)} · SEO Intelligence</div>'
+        '</td></tr></table></body></html>'
+    )
 
 
 def send_email(subject: str, html_body: str, recipients: list) -> None:
@@ -188,13 +263,11 @@ def send_email(subject: str, html_body: str, recipients: list) -> None:
 
 
 def main():
-    parsed = feedparser.parse(SOURCE_FEED)
-    if parsed.bozo and not parsed.entries:
-        raise SystemExit(f"無法讀取來源 feed: {SOURCE_FEED}")
+    entries = gather_entries()
 
     # ----- 測試模式:加工最近 3 篇,只寄俾自己,唔改去重記錄 -----
     if TEST_SEND:
-        sample = parsed.entries[:3]
+        sample = entries[:3]
         items = []
         for e in sample:
             print(f"[測試] 加工:{e.get('title')}")
@@ -209,7 +282,7 @@ def main():
     seen = load_seen()
     seen_set = set(seen)
     new_items = []
-    for entry in parsed.entries:
+    for entry in entries:
         link = entry.get("link")
         if not link or link in seen_set:
             continue
