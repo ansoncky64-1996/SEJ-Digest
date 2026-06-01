@@ -358,9 +358,16 @@ def send_email(subject: str, html_body: str, recipients: list) -> None:
 def main():
     entries = gather_entries()
 
-    # ----- 測試模式:加工最近 3 篇,只寄俾自己,唔改去重記錄 -----
+    # ----- 測試模式:每個來源各抽 2 篇,只寄俾自己,唔改去重記錄 -----
     if TEST_SEND:
-        sample = entries[:3]
+        per_source = {}
+        sample = []
+        for e in entries:
+            src = source_name(e.get("link", ""))
+            if per_source.get(src, 0) >= 2:   # 每個來源最多 2 篇
+                continue
+            per_source[src] = per_source.get(src, 0) + 1
+            sample.append(e)
         items = []
         for e in sample:
             print(f"[測試] 加工:{e.get('title')}")
@@ -368,7 +375,7 @@ def main():
                           "summary_html": summarise(e.get("title", ""), e.get("link", ""), extract_text(e))})
         today = dt.datetime.now(HKT).strftime("%Y-%m-%d")
         send_email(f"[測試] {BRAND_NAME}|SEO 每日重點 {today}", build_email_html(items), [GMAIL_ADDRESS])
-        print(f"[測試] 已寄 {len(items)} 篇樣本俾 {GMAIL_ADDRESS}")
+        print(f"[測試] 已寄 {len(items)} 篇樣本俾 {GMAIL_ADDRESS}(來源:{per_source})")
         return
 
     # ----- 正式模式:只處理未發過嘅新文 -----
