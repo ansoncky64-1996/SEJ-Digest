@@ -2,7 +2,7 @@ name: Daily SEJ SEO digest
 
 on:
   schedule:
-    - cron: "0 1 * * *"   # 每日 UTC 01:00 = 香港 09:00(GitHub 排程偶爾延遲幾分鐘,正常)
+    - cron: "0 1 * * *"   # 每日 UTC 01:00 = 香港 09:00(GitHub 排程偶爾延遲,正常)
   workflow_dispatch:
     inputs:
       test:
@@ -11,7 +11,7 @@ on:
         default: false
 
 permissions:
-  contents: write           # 俾 workflow 將去重記錄 state.json 推返入 repo
+  contents: write
 
 jobs:
   build:
@@ -29,11 +29,12 @@ jobs:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           RECIPIENTS: ${{ secrets.RECIPIENTS }}
-          # ↓ 以下係 branding,可以直接喺度改(唔係 secret)
-          BRAND_NAME: "SEO 每日重點"
+          # ↓ Branding(可直接喺度改)
+          BRAND_NAME: "Digital Zoo"
           BRAND_COLOR: "#1f4e79"
-          LOGO_URL: ""        # 有 logo 就放圖片網址(例如放喺 GitHub Pages 嗰條)
-          MODEL: "deepseek/deepseek-v4-flash"           # 留空就用 script 內預設;想指定 V4 就喺度填 DeepSeek V4 ID
+          LOGO_URL: "https://digitalzoo.com.hk/wp-content/uploads/2024/05/digial.png"
+          ICON_URL: "https://digitalzoo.com.hk/wp-content/uploads/2024/01/cropped-dz-icon-270x270.png"
+          MODEL: "deepseek/deepseek-v4-flash"
           TEST_SEND: ${{ inputs.test }}
         run: python generate_feed.py
 
