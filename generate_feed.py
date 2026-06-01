@@ -28,7 +28,7 @@ from openai import OpenAI
 # 多個來源:用逗號分隔。想加站就喺呢度(或 workflow 嘅 SOURCE_FEEDS)加多條 feed URL。
 SOURCE_FEEDS = [u.strip() for u in os.environ.get(
     "SOURCE_FEEDS",
-    "https://www.searchenginejournal.com/category/seo/feed/,https://searchengineland.com/category/seo/feed/",
+    "https://www.searchenginejournal.com/category/seo/feed/,https://searchengineland.com/feed/",
 ).split(",") if u.strip()]
 MODEL = os.environ.get("MODEL", "deepseek/deepseek-v4-flash")  # ← 換返你之前用嘅 DeepSeek V4 ID
 MAX_NEW_PER_RUN = int(os.environ.get("MAX_NEW_PER_RUN", "10"))  # 單次最多加工幾多篇(防爆)
@@ -42,8 +42,9 @@ GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "")          # 你個 Gmail(寄�
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "") # Gmail app password(16 位)
 RECIPIENTS = [e.strip() for e in os.environ.get("RECIPIENTS", "").split(",") if e.strip()]
 BRAND_NAME = os.environ.get("BRAND_NAME", "Digital Zoo")
-BRAND_COLOR = os.environ.get("BRAND_COLOR", "#FF0080")
+BRAND_COLOR = os.environ.get("BRAND_COLOR", "#1f4e79")
 LOGO_URL = os.environ.get("LOGO_URL", "https://digitalzoo.com.hk/wp-content/uploads/2024/05/digial.png")  # Digital Zoo wordmark,可換
+ICON_URL = os.environ.get("ICON_URL", "https://digitalzoo.com.hk/wp-content/uploads/2024/01/cropped-dz-icon-270x270.png")  # DZ 方形徽章,可換/留空
 TEST_SEND = os.environ.get("TEST_SEND", "").lower() in ("1", "true", "yes")
 
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=os.environ.get("OPENROUTER_API_KEY"))
@@ -186,10 +187,19 @@ def build_email_html(items: list) -> str:
     for it in items:
         groups.setdefault(source_name(it["link"]), []).append(it)
 
+    icon_img = (f'<img src="{html.escape(ICON_URL)}" alt="" width="38" height="38" style="display:block;width:38px;height:38px;border-radius:9px;border:0;">'
+                if ICON_URL else "")
     if LOGO_URL:
-        brand = f'<img src="{html.escape(LOGO_URL)}" alt="{html.escape(BRAND_NAME)}" height="34" style="display:block;height:34px;width:auto;border:0;">'
+        logo_img = f'<img src="{html.escape(LOGO_URL)}" alt="{html.escape(BRAND_NAME)}" height="30" style="display:block;height:30px;width:auto;border:0;">'
     else:
-        brand = f'<span style="font-size:22px;font-weight:800;color:{INK};">{html.escape(BRAND_NAME)}</span>'
+        logo_img = f'<span style="font-size:21px;font-weight:800;color:{INK};">{html.escape(BRAND_NAME)}</span>'
+    if icon_img:
+        brand = (f'<table role="presentation" cellpadding="0" cellspacing="0"><tr>'
+                 f'<td style="padding-right:11px;vertical-align:middle;">{icon_img}</td>'
+                 f'<td style="vertical-align:middle;">{logo_img}</td>'
+                 f'</tr></table>')
+    else:
+        brand = logo_img
 
     sections = []
     for src_name, arr in groups.items():
@@ -218,10 +228,8 @@ def build_email_html(items: list) -> str:
     header = (
         f'<tr><td style="padding:26px 34px 20px;border-bottom:3px solid {ACCENT};">'
         f'{brand}'
-        f'<div style="margin-top:14px;">'
-        f'<span style="font-size:19px;font-weight:800;color:{INK};">SEO 每日重點</span>'
-        f'<div style="margin-top:3px;font-size:12.5px;color:{MUTED};">每日精選 SEO 行業新文 · AI 中英對照摘要 · {today}</div>'
-        f'</div></td></tr>'
+        f'<div style="margin-top:14px;font-size:12.5px;color:{MUTED};">每日精選 SEO 行業新文 · AI 中英對照摘要 · {today}</div>'
+        f'</td></tr>'
     )
     footer = (
         f'<tr><td style="padding:22px 34px;background:#fafafb;border-top:1px solid {BORDER};font-size:11.5px;color:#9aa0aa;line-height:1.7;">'
