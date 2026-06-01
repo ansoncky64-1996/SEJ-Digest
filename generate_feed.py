@@ -27,7 +27,7 @@ from openai import OpenAI
 # ---------- 基本設定 ----------
 # 多個來源:用逗號分隔。想加站就喺呢度(或 workflow 嘅 SOURCE_FEEDS)加多條 feed URL。
 SOURCE_FEEDS = [u.strip() for u in os.environ.get(
-    "SOURCE_FEEDS",
+    "https://rss.app/feeds/UEkjjet8qs4Vw8BA.xml",
     "https://www.searchenginejournal.com/category/seo/feed/,https://feeds.searchengineland.com/searchengineland",
 ).split(",") if u.strip()]
 MODEL = os.environ.get("MODEL", "deepseek/deepseek-v4-flash")  # ← 換返你之前用嘅 DeepSeek V4 ID
