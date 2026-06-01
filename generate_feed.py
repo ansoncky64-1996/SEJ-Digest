@@ -46,6 +46,7 @@ BRAND_COLOR = os.environ.get("BRAND_COLOR", "#1f4e79")
 LOGO_URL = os.environ.get("LOGO_URL", "https://digitalzoo.com.hk/wp-content/uploads/2024/05/digial.png")  # Digital Zoo wordmark,可換
 ICON_URL = os.environ.get("ICON_URL", "https://digitalzoo.com.hk/wp-content/uploads/2024/01/cropped-dz-icon-270x270.png")  # DZ 方形徽章,可換/留空
 TEST_SEND = os.environ.get("TEST_SEND", "").lower() in ("1", "true", "yes")
+JINA_API_KEY = os.environ.get("JINA_API_KEY", "")  # 可選:Jina Reader key(提高全文抓取額度)
 
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=os.environ.get("OPENROUTER_API_KEY"))
 
@@ -187,6 +188,17 @@ def save_seen(seen: list) -> None:
     STATE_PATH.write_text(json.dumps({"seen": seen[-SEEN_CAP:]}, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def fetch_fulltext_via_jina(url: str) -> str:
+    """經 Jina Reader 用真實瀏覽器攞全文,可繞過 Cloudflare。回傳乾淨文字。"""
+    import urllib.request
+    headers = {"User-Agent": BROWSER_UA, "X-Return-Format": "text"}
+    if JINA_API_KEY:
+        headers["Authorization"] = "Bearer " + JINA_API_KEY
+    req = urllib.request.Request("https://r.jina.ai/" + url, headers=headers)
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return r.read().decode("utf-8", "ignore")
+
+
 def extract_text(entry) -> str:
     raw = ""
     if entry.get("content"):
@@ -201,15 +213,27 @@ def extract_text(entry) -> str:
             text = None
         if not text:
             text = strip_html(raw)
-    if (not text or len(text) < 400) and entry.get("link"):
+
+    link = entry.get("link")
+    # 全文太短就抓原文:先試直接(SEJ 等通),再試 Jina Reader(過 Cloudflare,SE Land 靠佢)
+    if (not text or len(text) < 600) and link:
         try:
-            downloaded = trafilatura.fetch_url(entry["link"])
+            downloaded = trafilatura.fetch_url(link)
             if downloaded:
                 full = trafilatura.extract(downloaded)
                 if full and len(full) > len(text or ""):
                     text = full
         except Exception:
             pass
+    if (not text or len(text) < 600) and link:
+        try:
+            jt = fetch_fulltext_via_jina(link)
+            if jt and len(jt) > len(text or ""):
+                text = jt
+                print(f"    (Jina 全文成功:{len(jt)} 字)")
+        except Exception as e:
+            print(f"    (Jina 全文抓取失敗,改用摘要:{e})")
+
     return (text or entry.get("title", ""))[:8000]
 
 
