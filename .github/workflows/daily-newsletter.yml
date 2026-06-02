@@ -2,7 +2,7 @@ name: Daily SEJ SEO digest
 
 on:
   schedule:
-    - cron: "0 1 * * *"   # 每日 UTC 01:00 = 香港 09:00(GitHub 排程偶爾延遲,正常)
+    - cron: "0 2 * * 1-5"
   workflow_dispatch:
     inputs:
       test:
