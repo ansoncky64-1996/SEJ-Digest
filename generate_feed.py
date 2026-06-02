@@ -43,9 +43,18 @@ STATE_PATH = Path(os.environ.get("STATE_PATH", "docs/state.json"))
 HKT = dt.timezone(dt.timedelta(hours=8))
 
 # ---------- Email / Branding 設定(由環境變數提供)----------
-GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "")          # 你個 Gmail(寄件人)
-GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "") # Gmail app password(16 位)
-RECIPIENTS = [e.strip() for e in os.environ.get("RECIPIENTS", "").split(",") if e.strip()]
+def _clean(s: str) -> str:
+    """清走隱形雜質:不換行空格(\xa0)、零寬字元、前後空白。"""
+    if not s:
+        return ""
+    for ch in ("\xa0", "\u200b", "\u200c", "\u200d", "\ufeff", "\u2060"):
+        s = s.replace(ch, "")
+    return s.strip()
+
+
+GMAIL_ADDRESS = _clean(os.environ.get("GMAIL_ADDRESS", ""))          # 你個 Gmail(寄件人)
+GMAIL_APP_PASSWORD = _clean(os.environ.get("GMAIL_APP_PASSWORD", "")).replace(" ", "")  # app password(去空格)
+RECIPIENTS = [_clean(e) for e in os.environ.get("RECIPIENTS", "").replace("\xa0", " ").split(",") if _clean(e)]
 BRAND_NAME = os.environ.get("BRAND_NAME", "Digital Zoo")
 BRAND_COLOR = os.environ.get("BRAND_COLOR", "#1f4e79")
 LOGO_URL = os.environ.get("LOGO_URL", "https://digitalzoo.com.hk/wp-content/uploads/2024/05/digial.png")  # Digital Zoo wordmark,可換
