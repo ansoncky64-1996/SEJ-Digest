@@ -285,9 +285,7 @@ def build_email_html(items: list) -> str:
     BORDER = "#ececf1"
     PAGE_BG = "#f0f1f4"
 
-    groups = {}
-    for it in items:
-        groups.setdefault(source_name(it["link"]), []).append(it)
+    items = sorted(items, key=lambda it: it.get("pub_ts", (0,)), reverse=True)
 
     icon_img = (f'<img src="{html.escape(ICON_URL)}" alt="" width="38" height="38" style="display:block;width:38px;height:38px;border-radius:9px;border:0;">'
                 if ICON_URL else "")
@@ -303,29 +301,31 @@ def build_email_html(items: list) -> str:
     else:
         brand = logo_img
 
-    sections = []
-    for src_name, arr in groups.items():
-        cards = []
-        for it in arr:
-            cards.append(
-                f'<tr><td style="padding:20px 0;border-bottom:1px solid {BORDER};">'
-                f'<a href="{html.escape(it["link"])}" style="font-size:16px;font-weight:700;color:{INK};text-decoration:none;line-height:1.45;">{html.escape(it["title"])}</a>'
-                f'<div style="margin-top:11px;font-size:13.5px;color:#3a3a45;line-height:1.7;">{it["summary_html"]}</div>'
-                f'<a href="{html.escape(it["link"])}" style="display:inline-block;margin-top:12px;font-size:12.5px;font-weight:600;color:{ACCENT};text-decoration:none;">閱讀原文 &rarr;</a>'
-                f'</td></tr>'
-            )
-        sections.append(
-            f'<tr><td style="padding:30px 34px 4px;">'
-            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
-            f'<td width="4" style="background:{ACCENT};border-radius:2px;line-height:1px;font-size:1px;">&nbsp;</td>'
-            f'<td style="padding-left:10px;">'
-            f'<span style="font-size:15px;font-weight:800;color:{INK};letter-spacing:.2px;">{html.escape(src_name)}</span>'
-            f'<span style="font-size:12px;color:{MUTED};font-weight:600;">　{len(arr)} 篇</span>'
-            f'</td></tr></table></td></tr>'
-            f'<tr><td style="padding:0 34px;">'
-            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">{"".join(cards)}</table>'
+    cards = []
+    for it in items:
+        src = source_name(it["link"])
+        date = it.get("pub_str", "")
+        author = it.get("author", "")
+        meta = " · ".join(p for p in (date, author) if p)
+        date_html = (f'<div style="font-size:11.5px;color:{MUTED};margin-bottom:7px;">{html.escape(meta)}</div>'
+                     if meta else "")
+        pill = (f'<span style="display:inline-block;margin-left:8px;padding:2px 9px;font-size:11px;'
+                f'font-weight:700;color:{ACCENT};background:#eef2f7;border-radius:10px;'
+                f'white-space:nowrap;vertical-align:middle;">{html.escape(src)}</span>')
+        cards.append(
+            f'<tr><td style="padding:20px 0;border-bottom:1px solid {BORDER};">'
+            f'{date_html}'
+            f'<a href="{html.escape(it["link"])}" style="font-size:16px;font-weight:700;color:{INK};text-decoration:none;line-height:1.45;">{html.escape(it["title"])}</a>'
+            f'{pill}'
+            f'<div style="margin-top:11px;font-size:13.5px;color:#3a3a45;line-height:1.7;">{it["summary_html"]}</div>'
+            f'<a href="{html.escape(it["link"])}" style="display:inline-block;margin-top:12px;font-size:12.5px;font-weight:600;color:{ACCENT};text-decoration:none;">閱讀原文 &rarr;</a>'
             f'</td></tr>'
         )
+    content = (
+        f'<tr><td style="padding:24px 34px 6px;">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">{"".join(cards)}</table>'
+        f'</td></tr>'
+    )
 
     header = (
         f'<tr><td style="padding:26px 34px 20px;border-bottom:3px solid {ACCENT};">'
@@ -348,7 +348,7 @@ def build_email_html(items: list) -> str:
         '<table role="presentation" width="600" cellpadding="0" cellspacing="0" '
         f'style="max-width:600px;width:100%;background:#ffffff;border:1px solid {BORDER};border-radius:14px;overflow:hidden;'
         'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,\'Helvetica Neue\',Arial,\'PingFang HK\',\'Microsoft JhengHei\',sans-serif;">'
-        f'{header}{"".join(sections)}{footer}'
+        f'{header}{content}{footer}'
         '</table>'
         f'<div style="margin-top:14px;font-size:11px;color:#b0b4bd;font-family:Arial,sans-serif;">Powered by {html.escape(BRAND_NAME)} · SEO Intelligence</div>'
         '</td></tr></table></body></html>'
@@ -372,6 +372,27 @@ def send_email(subject: str, html_body: str, recipients: list) -> None:
         server.send_message(msg)
 
 
+def entry_author(e) -> str:
+    """由 feed entry 取出作者名,試多個常見欄位;冇就回空。"""
+    a = e.get("author") or ""
+    if not a and e.get("authors"):
+        try:
+            a = e["authors"][0].get("name", "") or ""
+        except Exception:
+            a = ""
+    if not a:
+        a = e.get("dc_creator", "") or ""
+    return a.strip()
+
+
+def entry_pubinfo(e):
+    """由 feed entry 取出排序用時間 tuple 同顯示用日期字串(冇就回空)。"""
+    ts = e.get("_sort_ts", (0,))
+    if ts and len(ts) >= 3 and ts[0] and ts[0] > 1970:
+        return ts, f"{ts[0]:04d}-{ts[1]:02d}-{ts[2]:02d}"
+    return (0,), ""
+
+
 def main():
     entries = gather_entries()
 
@@ -388,8 +409,10 @@ def main():
         items = []
         for e in sample:
             print(f"[測試] 加工:{e.get('title')}")
+            pub_ts, pub_str = entry_pubinfo(e)
             items.append({"title": e.get("title", "(無標題)"), "link": e.get("link", ""),
-                          "summary_html": summarise(e.get("title", ""), e.get("link", ""), extract_text(e))})
+                          "summary_html": summarise(e.get("title", ""), e.get("link", ""), extract_text(e)),
+                          "pub_ts": pub_ts, "pub_str": pub_str, "author": entry_author(e)})
         today = dt.datetime.now(HKT).strftime("%Y-%m-%d")
         send_email(f"[測試] {BRAND_NAME}|SEO 每日重點 {today}", build_email_html(items), [GMAIL_ADDRESS])
         print(f"[測試] 已寄 {len(items)} 篇樣本俾 {GMAIL_ADDRESS}(來源:{per_source})")
@@ -412,7 +435,9 @@ def main():
         except Exception as ex:
             print(f"  加工失敗,今次跳過:{ex}")
             continue
-        new_items.append({"title": title, "link": link, "summary_html": summary})
+        new_items.append({"title": title, "link": link, "summary_html": summary,
+                          "pub_ts": entry_pubinfo(entry)[0], "pub_str": entry_pubinfo(entry)[1],
+                          "author": entry_author(entry)})
         seen.append(link)
 
     if not new_items:
