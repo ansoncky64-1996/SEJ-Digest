@@ -1,12 +1,10 @@
 name: Daily SEJ SEO digest
 
 on:
-  schedule:
-    - cron: "0 2 * * 1-5"
   workflow_dispatch:
     inputs:
       test:
-        description: "測試模式(只將最近 3 篇寄俾自己)"
+        description: "測試模式(只將最近幾篇寄俾自己)"
         type: boolean
         default: false
 
